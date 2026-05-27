@@ -1,4 +1,4 @@
-import * as Sounds from '../Sounds';
+import * as AudioPlayback from '../AudioPlayback';
 import createTimerSound from '../TimerSound';
 import { TARGET } from '../AudioMessages';
 
@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   (async () => {
     switch (message.command) {
       case 'play':
-        await Sounds.play(message.filename);
+        await AudioPlayback.play(message.filename);
         break;
 
       case 'startTimerSound':

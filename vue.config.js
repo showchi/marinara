@@ -1,6 +1,8 @@
 const FileManagerPlugin = require('filemanager-webpack-plugin');
 const WebpackTouch = require('webpack-touch');
 
+const isTest = process.env.NODE_ENV === 'test';
+
 module.exports = {
   configureWebpack: {
     node: false,
@@ -13,7 +15,7 @@ module.exports = {
       filename: '[name].js',
       chunkFilename: '[name].js'
     },
-    optimization: {
+    optimization: isTest ? {} : {
       splitChunks: {
         cacheGroups: {
           vendors: {

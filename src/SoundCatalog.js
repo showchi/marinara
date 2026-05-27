@@ -59,10 +59,15 @@ function createTimerSounds() {
   return sounds;
 }
 
-const notification = createNotificationSounds();
-const timer = createTimerSounds();
+function getNotificationSounds() {
+  return createNotificationSounds();
+}
+
+function getTimerSounds() {
+  return createTimerSounds();
+}
 
 export {
-  notification,
-  timer
+  getNotificationSounds,
+  getTimerSounds
 };
