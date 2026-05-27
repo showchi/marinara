@@ -264,7 +264,8 @@ class PomodoroTimer extends EventEmitter
       return Phase.ShortBreak;
     }
 
-    if (this.pomodorosUntilLongBreak === 0) {
+    let completedPomodoros = this.pomodoros + (this.isRunning || this.isPaused ? 1 : 0);
+    if (this._pomodorosUntilLongBreak(completedPomodoros) === 0) {
       return Phase.LongBreak;
     } else {
       return Phase.ShortBreak;
@@ -276,12 +277,16 @@ class PomodoroTimer extends EventEmitter
   }
 
   get pomodorosUntilLongBreak() {
+    return this._pomodorosUntilLongBreak(this.pomodoros);
+  }
+
+  _pomodorosUntilLongBreak(pomodoros) {
     let { interval } = this.settings.longBreak;
     if (!interval) {
       return null;
     }
 
-    return interval - ((this.pomodoros - 1) % interval) - 1;
+    return interval - ((pomodoros - 1) % interval) - 1;
   }
 
   get remaining() {

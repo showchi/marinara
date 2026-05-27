@@ -56,6 +56,15 @@ describe('PomodoroTimer', () => {
     }
   });
 
+  it('counts a paused focus timer when predicting the next phase', () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    timer.pomodoros = 3;
+    timer.start();
+    timer.pause();
+
+    assert.equal(timer.nextPhase, Phase.LongBreak);
+  });
+
   it('restores active timer duration from the snapshot after settings change', () => {
     let originalSettings = {
       focus: { duration: 25 },
