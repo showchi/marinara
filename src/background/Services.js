@@ -4,6 +4,10 @@ import { SingletonPage, PageHost } from './SingletonPage';
 
 class SettingsService extends Service
 {
+  static get serviceName() {
+    return 'SettingsService';
+  }
+
   constructor(settingsManager) {
     super();
     this.settingsManager = settingsManager;
@@ -64,6 +68,10 @@ class SettingsService extends Service
 
 class HistoryService extends Service
 {
+  static get serviceName() {
+    return 'HistoryService';
+  }
+
   constructor(history) {
     super();
     this.history = history;
@@ -92,6 +100,10 @@ class HistoryService extends Service
 
 class PomodoroService extends Service
 {
+  static get serviceName() {
+    return 'PomodoroService';
+  }
+
   constructor(timer) {
     super();
     this.timer = timer;
@@ -145,17 +157,25 @@ class PomodoroService extends Service
 
 class SoundsService extends Service
 {
+  static get serviceName() {
+    return 'SoundsService';
+  }
+
   async getNotificationSounds() {
-    return Sounds.notification;
+    return Sounds.getNotificationSounds();
   }
 
   async getTimerSounds() {
-    return Sounds.timer;
+    return Sounds.getTimerSounds();
   }
 }
 
 class OptionsService extends Service
 {
+  static get serviceName() {
+    return 'OptionsService';
+  }
+
   async showPage(optionPage) {
     let manifest = chrome.runtime.getManifest();
     let url = chrome.runtime.getURL(manifest.options_page + '#/' + optionPage);

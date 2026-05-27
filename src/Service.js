@@ -1,5 +1,12 @@
 import EventEmitter from 'events';
 
+function isNoReceiverError(error) {
+  return error && [
+    'Could not establish connection. Receiving end does not exist.',
+    'The message port closed before a response was received.'
+  ].includes(error.message);
+}
+
 class ServiceBroker
 {
   constructor() {
@@ -28,12 +35,12 @@ class ServiceBroker
   }
 
   register(service) {
-    this.services[service.constructor.name] = service;
+    this.services[service.serviceName] = service;
     return service;
   }
 
   unregister(service) {
-    delete this.services[service.constructor.name];
+    delete this.services[service.serviceName];
     return service;
   }
 
@@ -51,7 +58,14 @@ class ServiceBroker
     // Service is defined in another context, use sendMessage to call it.
     return await new Promise((resolve, reject) => {
       let message = { serviceName, methodName, args };
-      chrome.runtime.sendMessage(message, ({ result, error }) => {
+      chrome.runtime.sendMessage(message, response => {
+        let lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+
+        let { result, error } = response || {};
         if (error !== undefined) {
           reject(error);
         } else {
@@ -142,7 +156,7 @@ class Service
 {
   constructor() {
     this.clients = {};
-    this.serviceName = this.constructor.name;
+    this.serviceName = this.constructor.serviceName || this.constructor.name;
   }
 
   emit(eventName, ...args) {
@@ -150,11 +164,16 @@ class Service
       serviceName: this.serviceName,
       eventName,
       args
+    }, () => {
+      let lastError = chrome.runtime.lastError;
+      if (lastError && !isNoReceiverError(lastError)) {
+        console.error(lastError.message);
+      }
     });
   }
 
   static get proxy() {
-    const serviceName = this.name;
+    const serviceName = this.serviceName || this.name;
     const create = () => new Proxy(function() {}, new ServiceProxy(serviceName));
 
     const handler = {
