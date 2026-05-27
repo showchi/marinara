@@ -1,5 +1,11 @@
 import { assert } from 'chai';
 
+global.chrome = {
+  i18n: {
+    getMessage: key => key
+  }
+};
+
 function loadMenuDispatchApi() {
   let module = require('@/background/Menu');
   let api = {
@@ -74,19 +80,22 @@ describe('Pomodoro menu dispatch', () => {
 
   it('describes menu items with command ids instead of inline callback closures', () => {
     let { MENU_IDS, createPomodoroMenuItems } = loadMenuDispatchApi();
-    let timer = {
-      hasLongBreak: true,
-      isRunning: true,
-      isPaused: false
-    };
+    let timers = [
+      { hasLongBreak: true, isRunning: false, isPaused: false },
+      { hasLongBreak: true, isRunning: true, isPaused: false },
+      { hasLongBreak: true, isRunning: false, isPaused: true }
+    ];
 
-    let items = flattenMenuItems(createPomodoroMenuItems(timer));
+    let items = timers.flatMap(timer => flattenMenuItems(createPomodoroMenuItems(timer)));
+    let actionItems = items.filter(item => !item.children);
+    let parentItems = items.filter(item => item.children);
 
-    assert.includeMembers(items.map(item => item.id), Object.values(MENU_IDS));
+    assert.includeMembers(actionItems.map(item => item.id), Object.values(MENU_IDS));
+    assert.include(parentItems.map(item => item.id), 'restartTimer');
     for (let item of items) {
       assert.notProperty(item, 'onclick');
       assert.notProperty(item, 'run');
-      if (item.id) {
+      if (!item.children && item.id) {
         assert.include(Object.values(MENU_IDS), item.id);
       }
     }

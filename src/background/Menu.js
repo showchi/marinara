@@ -48,6 +48,7 @@ class Menu
     await Chrome.contextMenus.removeAll();
 
     let firstGroup = true;
+    let separator = 0;
     for (let group of this.groups) {
       let firstItem = true;
       for (let item of group.items) {
@@ -56,14 +57,19 @@ class Menu
         }
 
         if (firstItem && !firstGroup) {
-          await Chrome.contextMenus.create({ type: 'separator', contexts: this.contexts });
+          await Chrome.contextMenus.create({
+            id: `separator-${++separator}`,
+            type: 'separator',
+            contexts: this.contexts
+          });
         }
 
         firstGroup = false;
         firstItem = false;
 
         if (item instanceof ParentMenu) {
-          let id = await Chrome.contextMenus.create({
+          await Chrome.contextMenus.create({
+            id: item.id,
             title: item.title,
             contexts: this.contexts
           });
@@ -77,7 +83,7 @@ class Menu
               id: child.id,
               title: child.title,
               contexts: this.contexts,
-              parentId: id
+              parentId: item.id
             });
           }
         } else {
@@ -117,6 +123,10 @@ class ParentMenu
     return '';
   }
 
+  get id() {
+    return '';
+  }
+
   get visible() {
     return false;
   }
@@ -130,6 +140,10 @@ class RestartTimerParentMenu extends ParentMenu
 
   get title() {
     return M.restart_timer;
+  }
+
+  get id() {
+    return 'restartTimer';
   }
 
   get visible() {
