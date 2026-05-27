@@ -9,9 +9,9 @@ class StorageManager extends EventEmitter
   }
 
   async get() {
-    let [payload, modified] = this._upgrade(await this.storage.get());
+    let [payload, modified] = this._upgrade(await this.storage.get(this._storageKeys()));
+    payload = this._schemaPayload(payload);
     if (modified) {
-      await this.storage.clear();
       await this.storage.set(payload);
     }
 
@@ -20,8 +20,29 @@ class StorageManager extends EventEmitter
 
   async set(payload) {
     var [payload, _] = this._upgrade(payload);
+    payload = this._schemaPayload(payload);
     await this.storage.set(payload);
     this.emit('change', payload);
+  }
+
+  _schemaKeys() {
+    return Object.keys(this.schema.default);
+  }
+
+  _storageKeys() {
+    return [
+      ...this._schemaKeys(),
+      ...(this.schema.legacyKeys || [])
+    ];
+  }
+
+  _schemaPayload(payload) {
+    return this._schemaKeys().reduce((result, key) => {
+      if (Object.prototype.hasOwnProperty.call(payload, key)) {
+        result[key] = payload[key];
+      }
+      return result;
+    }, {});
   }
 
   _upgrade(payload) {

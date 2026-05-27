@@ -75,6 +75,10 @@ class SettingsSchema
     };
   }
 
+  get legacyKeys() {
+    return ['break'];
+  }
+
   from1To2(v1) {
     return {
       focus: {
