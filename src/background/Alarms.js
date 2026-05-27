@@ -4,6 +4,7 @@ import M from '../Messages';
 
 const AUTOSTART_ALARM = 'autostart';
 const TIMER_EXPIRE_ALARM = 'timer-expire';
+const BADGE_UPDATE_ALARM = 'badge-update';
 
 let mutex = new Mutex();
 
@@ -40,6 +41,7 @@ async function setAutostartAlarm(settings) {
 
 async function setTimerAlarm(timer) {
   await Chrome.alarms.clear(TIMER_EXPIRE_ALARM);
+  await Chrome.alarms.clear(BADGE_UPDATE_ALARM);
 
   let { expiresAt } = timer.status;
   if (!timer.isRunning || !expiresAt) {
@@ -47,6 +49,7 @@ async function setTimerAlarm(timer) {
   }
 
   Chrome.alarms.create(TIMER_EXPIRE_ALARM, { when: expiresAt });
+  Chrome.alarms.create(BADGE_UPDATE_ALARM, { periodInMinutes: 1 });
 }
 
 async function onAlarm(alarm, { timer, settingsManager }) {
@@ -54,6 +57,8 @@ async function onAlarm(alarm, { timer, settingsManager }) {
     await onAutostartAlarm(timer, settingsManager);
   } else if (alarm.name === TIMER_EXPIRE_ALARM) {
     await onTimerExpireAlarm(alarm, timer);
+  } else if (alarm.name === BADGE_UPDATE_ALARM) {
+    await onBadgeUpdateAlarm(timer);
   }
 }
 
@@ -96,9 +101,19 @@ async function onTimerExpireAlarm(alarm, timer) {
   timer.expire();
 }
 
+async function onBadgeUpdateAlarm(timer) {
+  if (!timer.isRunning) {
+    await setTimerAlarm(timer);
+    return;
+  }
+
+  timer.tickNow();
+}
+
 export {
   AUTOSTART_ALARM,
   TIMER_EXPIRE_ALARM,
+  BADGE_UPDATE_ALARM,
   install,
   setTimerAlarm,
   onAlarm

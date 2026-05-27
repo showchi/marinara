@@ -202,6 +202,14 @@ class Timer extends EventEmitter
     this.setTickInterval(this.tick);
   }
 
+  tickNow() {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.emit('tick', this.status);
+  }
+
   toJSON() {
     return this.status;
   }
@@ -439,6 +447,10 @@ class PomodoroTimer extends EventEmitter
 
   arm() {
     this.timer.arm();
+  }
+
+  tickNow() {
+    this.timer.tickNow();
   }
 
   toJSON() {

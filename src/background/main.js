@@ -71,7 +71,8 @@ async function run() {
 
   let menu = createPomodoroMenu(timer);
   timer.observe(new HistoryObserver(history));
-  timer.observe(new BadgeObserver());
+  let badgeObserver = new BadgeObserver();
+  timer.observe(badgeObserver);
   timer.observe(new NotificationObserver(timer, settings, history));
   timer.observe(new ExpirationSoundObserver(settings));
   timer.observe(new TimerSoundObserver(settings));
@@ -103,6 +104,11 @@ async function run() {
     await timerStore.save(timer);
   } else {
     timer.arm();
+    if (timer.isRunning) {
+      badgeObserver.onStart(timer.status);
+    } else if (timer.isPaused) {
+      badgeObserver.onPause(timer.status);
+    }
   }
   if (timer.isRunning && timer.phase === Phase.Focus && settings.focus.timerSound) {
     // Rehydrate focus timer sound after service worker/offscreen recovery.
