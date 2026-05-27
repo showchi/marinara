@@ -73,6 +73,8 @@
   "modules/expire.js",
   "modules/options.html",
   "modules/options.js",
+  "modules/offscreen.html",
+  "modules/offscreen.js",
   "_locales/ar/messages.json",
   "_locales/bn/messages.json",
   "_locales/ca/messages.json",

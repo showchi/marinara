@@ -21,16 +21,17 @@ class SingletonPage
     let targetUrl = new URL(url);
     let targetCanonical = canonical(targetUrl);
 
-    let windows = chrome.extension.getViews();
-    for (let window of windows) {
-      if (canonical(new URL(window.location.href)) !== targetCanonical) {
+    let tabs = await Chrome.tabs.query({});
+    for (let tab of tabs) {
+      if (!tab.url || canonical(new URL(tab.url)) !== targetCanonical) {
         continue;
       }
 
-      // We found a matching page. Update its hash and return it.
-      let tabId = await new Promise(resolve => window.chrome.tabs.getCurrent(tab => resolve(tab.id)));
-      window.location.hash = targetUrl.hash;
-      return new SingletonPage(tabId);
+      // We found a matching page. Update its URL to keep the hash in sync.
+      if (tab.url !== url) {
+        await Chrome.tabs.update(tab.id, { url });
+      }
+      return new SingletonPage(tab.id);
     }
 
     // Page does not exist, so create it.
@@ -38,8 +39,8 @@ class SingletonPage
       let tab = await Chrome.tabs.create({ url, active: false, ...properties });
       return new SingletonPage(tab.id);
     } else if (host === PageHost.Window) {
-      let window = await Chrome.windows.create({ url, type: 'popup', ...properties });
-      return new SingletonPage(window.tabs[0].id);
+      let createdWindow = await Chrome.windows.create({ url, type: 'popup', ...properties });
+      return new SingletonPage(createdWindow.tabs[0].id);
     } else {
       throw new Error('Invalid page host.');
     }

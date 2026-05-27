@@ -4,6 +4,7 @@ class ServiceBroker
 {
   constructor() {
     this.services = {};
+    this.ready = Promise.resolve();
     chrome.runtime.onMessage.addListener(this.onMessage.bind(this));
   }
 
@@ -20,6 +21,10 @@ class ServiceBroker
 
   static async invoke(call) {
     return await this.instance.invoke(call);
+  }
+
+  static setReady(ready) {
+    this.instance.ready = ready;
   }
 
   register(service) {
@@ -57,19 +62,20 @@ class ServiceBroker
   }
 
   onMessage({ serviceName, methodName, args }, sender, respond) {
-    let service = this.services[serviceName];
-    if (!service || methodName === undefined) {
-      // Service is not defined in this context, so we have nothing to do.
+    if (methodName === undefined) {
+      // This may be a service event broadcast, so we have nothing to do.
       return;
-    }
-
-    if (!service[methodName]) {
-      respond({ error: `Invalid service request: ${serviceName}.${methodName}.` });
-      return true;
     }
 
     (async () => {
       try {
+        await this.ready;
+        let service = this.services[serviceName];
+        if (!service || !service[methodName]) {
+          respond({ error: `Invalid service request: ${serviceName}.${methodName}.` });
+          return;
+        }
+
         respond({ result: await service[methodName](...args) });
       } catch (e) {
         console.error(e);

@@ -7,14 +7,26 @@ const TimerState = new Enum({
   Paused: 2
 });
 
+function enumValue(enumeration, value) {
+  for (let key of enumeration.keys()) {
+    let option = enumeration[key];
+    if (option.valueOf() === value) {
+      return option;
+    }
+  }
+
+  throw new Error(`Invalid enum value: ${value}.`);
+}
+
 class Timer extends EventEmitter
 {
-  constructor(duration, tick) {
+  constructor(duration, tick, now = () => Date.now()) {
     super();
 
     this.state = TimerState.Stopped;
     this.duration = duration;
     this.tick = tick;
+    this.now = now;
 
     this.tickInterval = null;
     this.expireTimeout = null;
@@ -51,17 +63,23 @@ class Timer extends EventEmitter
   get elapsed() {
     let periodElapsed = 0;
     if (this.checkpointStartAt && this.isRunning) {
-      periodElapsed = (Date.now() - this.checkpointStartAt) / 1000;
+      periodElapsed = (this.now() - this.checkpointStartAt) / 1000;
     }
     return this.checkpointElapsed + periodElapsed;
   }
 
   get status() {
+    let expiresAt = null;
+    if (this.isRunning && this.checkpointStartAt) {
+      expiresAt = this.checkpointStartAt + ((this.duration - this.checkpointElapsed) * 1000);
+    }
+
     return {
       state: this.state,
       duration: this.duration,
       elapsed: this.elapsed,
       remaining: this.remaining,
+      expiresAt,
       checkpointElapsed: this.checkpointElapsed,
       checkpointStartAt: this.checkpointStartAt
     };
@@ -76,7 +94,7 @@ class Timer extends EventEmitter
     this.setTickInterval(this.tick);
 
     this.state = TimerState.Running;
-    this.checkpointStartAt = Date.now();
+    this.checkpointStartAt = this.now();
 
     this.emit('start', this.status);
   }
@@ -107,7 +125,7 @@ class Timer extends EventEmitter
     clearInterval(this.tickInterval);
     clearTimeout(this.expireTimeout);
 
-    let periodElapsed = (Date.now() - this.checkpointStartAt) / 1000;
+    let periodElapsed = (this.now() - this.checkpointStartAt) / 1000;
     this.checkpointElapsed += periodElapsed;
 
     this.state = TimerState.Paused;
@@ -124,7 +142,7 @@ class Timer extends EventEmitter
     this.setTickInterval(this.tick);
 
     this.state = TimerState.Running;
-    this.checkpointStartAt = Date.now();
+    this.checkpointStartAt = this.now();
 
     this.emit('resume', this.status);
   }
@@ -141,7 +159,7 @@ class Timer extends EventEmitter
 
       this.tickInterval = null;
       this.expireTimeout = null;
-      this.checkpointStartAt = Date.now();
+      this.checkpointStartAt = this.now();
       this.checkpointElapsed = this.duration;
 
       this.state = TimerState.Stopped;
@@ -155,6 +173,38 @@ class Timer extends EventEmitter
       this.emit('tick', this.status);
     }, seconds * 1000);
   }
+
+  restore(snapshot, { arm = true } = {}) {
+    clearInterval(this.tickInterval);
+    clearTimeout(this.expireTimeout);
+
+    this.tickInterval = null;
+    this.expireTimeout = null;
+    this.state = enumValue(TimerState, snapshot.state);
+    if (!this.isStopped) {
+      this.duration = snapshot.duration;
+    }
+    this.checkpointStartAt = snapshot.checkpointStartAt || null;
+    this.checkpointElapsed = snapshot.checkpointElapsed || 0;
+
+    if (arm && this.isRunning && this.remaining > 0) {
+      this.setExpireTimeout(this.remaining);
+      this.setTickInterval(this.tick);
+    }
+  }
+
+  arm() {
+    if (!this.isRunning || this.expireTimeout || this.remaining <= 0) {
+      return;
+    }
+
+    this.setExpireTimeout(this.remaining);
+    this.setTickInterval(this.tick);
+  }
+
+  toJSON() {
+    return this.status;
+  }
 }
 
 const Phase = new Enum({
@@ -165,9 +215,10 @@ const Phase = new Enum({
 
 class PomodoroTimer extends EventEmitter
 {
-  constructor(settings, initialPhase = Phase.Focus, timerType = Timer) {
+  constructor(settings, initialPhase = Phase.Focus, timerType = Timer, now = () => Date.now()) {
     super();
     this.timerType = timerType;
+    this.now = now;
     this.advanceTimer = false;
     this.pomodoros = 0;
     this.settings = settings;
@@ -186,7 +237,7 @@ class PomodoroTimer extends EventEmitter
       this.timer.removeAllListeners();
     }
 
-    this.timer = new this.timerType(Math.floor(duration * 60), 60);
+    this.timer = new this.timerType(Math.floor(duration * 60), 60, this.now);
     this.timer.observe(this);
   }
 
@@ -261,6 +312,8 @@ class PomodoroTimer extends EventEmitter
     return {
       phase: this.phase,
       nextPhase: this.nextPhase,
+      pomodoros: this.pomodoros,
+      advanceTimer: this.advanceTimer,
       ...this.timer.status
     };
   }
@@ -356,6 +409,46 @@ class PomodoroTimer extends EventEmitter
 
     this.advanceTimer = true;
     this.emit('expire', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+  }
+
+  expire() {
+    clearInterval(this.timer.tickInterval);
+    clearTimeout(this.timer.expireTimeout);
+
+    this.timer.tickInterval = null;
+    this.timer.expireTimeout = null;
+    this.timer.checkpointStartAt = this.now();
+    this.timer.checkpointElapsed = this.timer.duration;
+    this.timer.state = TimerState.Stopped;
+
+    this.onExpire(this.timer.status);
+  }
+
+  restore(snapshot, { arm = true } = {}) {
+    this._phase = enumValue(Phase, snapshot.phase);
+    this.advanceTimer = !!snapshot.advanceTimer;
+    this.pomodoros = snapshot.pomodoros || 0;
+    this._updateTimer();
+    this.timer.restore(snapshot, { arm });
+  }
+
+  arm() {
+    this.timer.arm();
+  }
+
+  toJSON() {
+    return {
+      ...this.status,
+      state: this.state.valueOf(),
+      phase: this.phase.valueOf(),
+      nextPhase: this.nextPhase.valueOf()
+    };
+  }
+
+  static fromJSON(settings, snapshot, timerType = Timer, now = () => Date.now(), options = {}) {
+    let timer = new PomodoroTimer(settings, enumValue(Phase, snapshot.phase), timerType, now);
+    timer.restore(snapshot, options);
+    return timer;
   }
 }
 

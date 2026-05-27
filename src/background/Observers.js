@@ -1,12 +1,11 @@
 import M from '../Messages';
 import { Phase } from './Timer';
 import { pomodoroCount } from '../Filters';
-import * as Sounds from '../Sounds';
 import Notification from './Notification';
 import { ExpirationPage } from './Expiration';
 import Mutex from '../Mutex';
-import createTimerSound from '../TimerSound';
 import { SingletonPage, PageHost } from './SingletonPage';
+import audio from './AudioController';
 
 class BadgeObserver
 {
@@ -49,14 +48,14 @@ class BadgeObserver
     }
 
     let color = phase === Phase.Focus ? '#bb0000' : '#11aa11';
-    chrome.browserAction.setTitle({ title: tooltip });
-    chrome.browserAction.setBadgeText({ text });
-    chrome.browserAction.setBadgeBackgroundColor({ color });
+    chrome.action.setTitle({ title: tooltip });
+    chrome.action.setBadgeText({ text });
+    chrome.action.setBadgeBackgroundColor({ color });
   }
 
   removeBadge() {
-    chrome.browserAction.setTitle({ title: '' });
-    chrome.browserAction.setBadgeText({ text: '' });
+    chrome.action.setTitle({ title: '' });
+    chrome.action.setBadgeText({ text: '' });
   }
 }
 
@@ -65,46 +64,49 @@ class TimerSoundObserver
   constructor(settings) {
     this.settings = settings;
     this.mutex = new Mutex();
-    this.timerSound = null;
   }
 
   async onStart({ phase }) {
     let timerSoundSettings = this.settings.focus.timerSound;
-    await this.mutex.exclusive(async () => {
-      // Cleanup any existing timer sound.
-      this.timerSound && await this.timerSound.close();
-
+    await this.run(async () => {
       if (phase === Phase.Focus && timerSoundSettings) {
-        this.timerSound = await createTimerSound(timerSoundSettings);
-        this.timerSound.start();
+        await audio.startTimerSound(timerSoundSettings);
       } else {
-        this.timerSound = null;
+        await audio.closeTimerSound();
       }
     });
   }
 
   async onStop() {
-    await this.mutex.exclusive(async () => {
-      this.timerSound && await this.timerSound.close();
+    await this.run(async () => {
+      await audio.closeTimerSound();
     });
   }
 
   async onPause() {
-    await this.mutex.exclusive(async () => {
-      this.timerSound && await this.timerSound.stop();
+    await this.run(async () => {
+      await audio.pauseTimerSound();
     });
   }
 
   async onResume() {
-    await this.mutex.exclusive(async () => {
-      this.timerSound && await this.timerSound.start();
+    await this.run(async () => {
+      await audio.resumeTimerSound();
     });
   }
 
   async onExpire() {
-    await this.mutex.exclusive(async () => {
-      this.timerSound && await this.timerSound.close();
+    await this.run(async () => {
+      await audio.closeTimerSound();
     });
+  }
+
+  async run(fn) {
+    try {
+      await this.mutex.exclusive(fn);
+    } catch (error) {
+      console.error(error);
+    }
   }
 }
 
@@ -114,7 +116,7 @@ class ExpirationSoundObserver
     this.settings = settings;
   }
 
-  onExpire({ phase }) {
+  async onExpire({ phase }) {
     let sound = s => s && s.notifications.sound;
     let filename = {
       [Phase.Focus]: sound(this.settings.focus),
@@ -123,7 +125,11 @@ class ExpirationSoundObserver
     }[phase];
 
     if (filename) {
-      Sounds.play(filename);
+      try {
+        await audio.play(filename);
+      } catch (error) {
+        console.error(error);
+      }
     }
   }
 }
@@ -192,8 +198,8 @@ class NotificationObserver
 
     await this.mutex.exclusive(async () => {
       if (settings.notifications.desktop) {
-        this.notification = new Notification(title, messages.join('\n'), () => this.timer.start());
-        this.notification.addButton(buttonText, () => this.timer.start());
+        this.notification = new Notification(title, messages.join('\n'));
+        this.notification.addButton(buttonText);
         await this.notification.show();
       }
 
@@ -250,7 +256,7 @@ class CountdownObserver
     }
 
     let page = null;
-    let url = chrome.extension.getURL('modules/countdown.html');
+    let url = chrome.runtime.getURL('modules/countdown.html');
 
     if (host === 'tab') {
       page = await SingletonPage.show(url, PageHost.Tab);
@@ -267,10 +273,7 @@ class CountdownObserver
       properties = { state: 'maximized' };
     } else if (Array.isArray(resolution)) {
       let [windowWidth, windowHeight] = resolution;
-      const { width: screenWidth, height: screenHeight } = window.screen;
-      let left = screenWidth / 2 - windowWidth / 2;
-      let top = screenHeight / 2 - windowHeight / 2;
-      properties = { width: windowWidth, height: windowHeight, left, top };
+      properties = { width: windowWidth, height: windowHeight };
     }
 
     page = await SingletonPage.show(url, PageHost.Window, properties);
@@ -297,10 +300,6 @@ class MenuObserver
   }
 
   onResume() {
-    this.menu.apply();
-  }
-
-  onTick() {
     this.menu.apply();
   }
 

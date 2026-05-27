@@ -1,11 +1,17 @@
 import { assert } from 'chai';
-import { Phase, PomodoroTimer } from '@/background/Timer';
+import { Phase, PomodoroTimer, TimerState } from '@/background/Timer';
 
 PomodoroTimer.prototype.expired = function() {
   return new Promise(resolve => this.once('expire', resolve));
 };
 
 describe('PomodoroTimer', () => {
+  const settings = {
+    focus: { duration: 25 },
+    shortBreak: { duration: 5 },
+    longBreak: { duration: 15, interval: 4 }
+  };
+
   it('starts in the initial phase', async () => {
     let settings = {
       focus: { duration: 0 },
@@ -16,6 +22,87 @@ describe('PomodoroTimer', () => {
     let timer = new PomodoroTimer(settings, Phase.Focus);
     assert.equal(timer.phase, Phase.Focus);
     assert.equal(timer.nextPhase, Phase.ShortBreak);
+  });
+
+  it('serializes and restores a running focus timer snapshot without losing timer state', () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    timer.pomodoros = 3;
+    timer.start();
+
+    let restored = null;
+    try {
+      let snapshot = JSON.parse(JSON.stringify(timer.toJSON()));
+      assert.deepInclude(snapshot, {
+        phase: Phase.Focus.valueOf(),
+        nextPhase: Phase.LongBreak.valueOf(),
+        state: TimerState.Running.valueOf(),
+        pomodoros: 3
+      });
+      assert.isNumber(snapshot.checkpointStartAt);
+      assert.isNumber(snapshot.checkpointElapsed);
+
+      restored = PomodoroTimer.fromJSON(settings, snapshot);
+      assert.equal(restored.phase, Phase.Focus);
+      assert.equal(restored.nextPhase, Phase.LongBreak);
+      assert.equal(restored.state, TimerState.Running);
+      assert.equal(restored.pomodoros, 3);
+      assert.deepInclude(restored.toJSON(), {
+        checkpointStartAt: snapshot.checkpointStartAt,
+        checkpointElapsed: snapshot.checkpointElapsed
+      });
+    } finally {
+      timer.stop();
+      restored && restored.stop();
+    }
+  });
+
+  it('restores active timer duration from the snapshot after settings change', () => {
+    let originalSettings = {
+      focus: { duration: 25 },
+      shortBreak: { duration: 5 },
+      longBreak: { interval: null }
+    };
+    let updatedSettings = {
+      focus: { duration: 5 },
+      shortBreak: { duration: 5 },
+      longBreak: { interval: null }
+    };
+    let timer = new PomodoroTimer(originalSettings, Phase.Focus);
+    timer.start();
+
+    let restored = null;
+    try {
+      let snapshot = JSON.parse(JSON.stringify(timer.toJSON()));
+
+      restored = PomodoroTimer.fromJSON(updatedSettings, snapshot);
+
+      assert.equal(snapshot.duration, 25 * 60);
+      assert.equal(restored.toJSON().duration, 25 * 60);
+      assert.isAtLeast(restored.remaining, 24 * 60);
+    } finally {
+      timer.stop();
+      restored && restored.stop();
+    }
+  });
+
+  it('refreshes stopped timer duration from settings after restore', () => {
+    let originalSettings = {
+      focus: { duration: 25 },
+      shortBreak: { duration: 5 },
+      longBreak: { interval: null }
+    };
+    let updatedSettings = {
+      focus: { duration: 5 },
+      shortBreak: { duration: 5 },
+      longBreak: { interval: null }
+    };
+    let timer = new PomodoroTimer(originalSettings, Phase.Focus);
+    let snapshot = JSON.parse(JSON.stringify(timer.toJSON()));
+
+    let restored = PomodoroTimer.fromJSON(updatedSettings, snapshot);
+
+    assert.equal(snapshot.duration, 25 * 60);
+    assert.equal(restored.toJSON().duration, 5 * 60);
   });
 
   it('does not advance until timer expires', async () => {

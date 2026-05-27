@@ -13,6 +13,25 @@ module.exports = {
       filename: '[name].js',
       chunkFilename: '[name].js'
     },
+    optimization: {
+      splitChunks: {
+        cacheGroups: {
+          vendors: {
+            name: 'chunk-vendors',
+            test: /[\\/]node_modules[\\/]/,
+            priority: -10,
+            chunks: chunk => chunk.name !== 'background'
+          },
+          common: {
+            name: 'chunk-common',
+            minChunks: 2,
+            priority: -20,
+            chunks: chunk => chunk.name !== 'background',
+            reuseExistingChunk: true
+          }
+        }
+      }
+    },
     plugins: [
       new FileManagerPlugin({
         onStart: {
@@ -62,6 +81,12 @@ module.exports = {
       template: 'src/countdown/countdown.html',
       filename: 'countdown.html',
       chunks: ['chunk-vendors', 'chunk-common', 'countdown']
+    },
+    offscreen: {
+      entry: 'src/offscreen/main.js',
+      template: 'src/offscreen/offscreen.html',
+      filename: 'offscreen.html',
+      chunks: ['chunk-vendors', 'chunk-common', 'offscreen']
     },
     background: 'src/background/main.js'
   },

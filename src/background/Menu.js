@@ -1,5 +1,37 @@
 import M from '../Messages';
+import Chrome from '../Chrome';
 import { OptionsClient } from './Services';
+
+const MENU_IDS = {
+  startFocus: 'startFocus',
+  startShortBreak: 'startShortBreak',
+  startLongBreak: 'startLongBreak',
+  pause: 'pause',
+  resume: 'resume',
+  stop: 'stop',
+  startCycle: 'startCycle',
+  showHistoryPage: 'showHistoryPage'
+};
+
+async function dispatchPomodoroMenuCommand(id, { timer, optionsClient = OptionsClient.once }) {
+  let commands = {
+    [MENU_IDS.startFocus]: () => timer.startFocus(),
+    [MENU_IDS.startShortBreak]: () => timer.startShortBreak(),
+    [MENU_IDS.startLongBreak]: () => timer.startLongBreak(),
+    [MENU_IDS.pause]: () => timer.pause(),
+    [MENU_IDS.resume]: () => timer.resume(),
+    [MENU_IDS.stop]: () => timer.stop(),
+    [MENU_IDS.startCycle]: () => timer.startCycle(),
+    [MENU_IDS.showHistoryPage]: () => optionsClient.showHistoryPage()
+  };
+
+  let command = commands[id];
+  if (!command) {
+    return;
+  }
+
+  return await command();
+}
 
 class Menu
 {
@@ -12,8 +44,8 @@ class Menu
     this.groups.push(group);
   }
 
-  apply() {
-    chrome.contextMenus.removeAll();
+  async apply() {
+    await Chrome.contextMenus.removeAll();
 
     let firstGroup = true;
     for (let group of this.groups) {
@@ -24,14 +56,14 @@ class Menu
         }
 
         if (firstItem && !firstGroup) {
-          chrome.contextMenus.create({ type: 'separator', contexts: this.contexts });
+          await Chrome.contextMenus.create({ type: 'separator', contexts: this.contexts });
         }
 
         firstGroup = false;
         firstItem = false;
 
         if (item instanceof ParentMenu) {
-          let id = chrome.contextMenus.create({
+          let id = await Chrome.contextMenus.create({
             title: item.title,
             contexts: this.contexts
           });
@@ -41,18 +73,18 @@ class Menu
               continue;
             }
 
-            chrome.contextMenus.create({
+            await Chrome.contextMenus.create({
+              id: child.id,
               title: child.title,
               contexts: this.contexts,
-              onclick: () => child.run(),
               parentId: id
             });
           }
         } else {
-          chrome.contextMenus.create({
+          await Chrome.contextMenus.create({
+            id: item.id,
             title: item.title,
-            contexts: this.contexts,
-            onclick: () => item.run()
+            contexts: this.contexts
           });
         }
       }
@@ -107,6 +139,10 @@ class RestartTimerParentMenu extends ParentMenu
 
 class Action
 {
+  get id() {
+    return '';
+  }
+
   get title() {
     return '';
   }
@@ -124,6 +160,10 @@ class StartFocusingAction extends Action
   constructor(timer) {
     super();
     this.timer = timer;
+  }
+
+  get id() {
+    return MENU_IDS.startFocus;
   }
 
   get title() {
@@ -146,6 +186,10 @@ class StartShortBreakAction extends Action
     this.timer = timer;
   }
 
+  get id() {
+    return MENU_IDS.startShortBreak;
+  }
+
   get title() {
     return this.timer.hasLongBreak ? M.start_short_break : M.start_break;
   }
@@ -164,6 +208,10 @@ class StartLongBreakAction extends Action
   constructor(timer) {
     super();
     this.timer = timer;
+  }
+
+  get id() {
+    return MENU_IDS.startLongBreak;
   }
 
   get title() {
@@ -186,6 +234,10 @@ class StopTimerAction extends Action
     this.timer = timer;
   }
 
+  get id() {
+    return MENU_IDS.stop;
+  }
+
   get title() {
     return M.stop_timer;
   }
@@ -204,6 +256,10 @@ class PauseTimerAction extends Action
   constructor(timer) {
     super();
     this.timer = timer;
+  }
+
+  get id() {
+    return MENU_IDS.pause;
   }
 
   get title() {
@@ -226,6 +282,10 @@ class ResumeTimerAction extends Action
     this.timer = timer;
   }
 
+  get id() {
+    return MENU_IDS.resume;
+  }
+
   get title() {
     return M.resume_timer;
   }
@@ -243,6 +303,10 @@ class PomodoroHistoryAction extends Action
 {
   constructor() {
     super();
+  }
+
+  get id() {
+    return MENU_IDS.showHistoryPage;
   }
 
   get title() {
@@ -263,6 +327,10 @@ class StartPomodoroCycleAction extends Action
   constructor(timer) {
     super();
     this.timer = timer;
+  }
+
+  get id() {
+    return MENU_IDS.startCycle;
   }
 
   get title() {
@@ -288,12 +356,88 @@ class PomodoroMenuSelector
     this.timer = timer;
     this.inactive = inactive;
     this.active = active;
+    this.applyQueue = Promise.resolve();
+    this.applyAgain = false;
   }
 
   apply() {
-    let menu = (this.timer.isRunning || this.timer.isPaused) ? this.active : this.inactive;
-    menu.apply();
+    if (this.applying) {
+      this.applyAgain = true;
+      return this.applyQueue;
+    }
+
+    this.applying = true;
+    this.applyQueue = this.applyQueue
+      .then(async () => {
+        do {
+          this.applyAgain = false;
+          let menu = (this.timer.isRunning || this.timer.isPaused) ? this.active : this.inactive;
+          await menu.apply();
+        } while (this.applyAgain);
+      })
+      .catch(error => console.error(error))
+      .then(() => {
+        this.applying = false;
+      });
+
+    return this.applyQueue;
   }
+
+  dispatch(id) {
+    return dispatchPomodoroMenuCommand(id, { timer: this.timer });
+  }
+}
+
+function createPomodoroMenuItems(timer) {
+  let pause = new PauseTimerAction(timer);
+  let resume = new ResumeTimerAction(timer);
+  let stop = new StopTimerAction(timer);
+
+  let startCycle = new StartPomodoroCycleAction(timer);
+  let startFocus = new StartFocusingAction(timer);
+  let startShortBreak = new StartShortBreakAction(timer);
+  let startLongBreak = new StartLongBreakAction(timer);
+  let viewHistory = new PomodoroHistoryAction();
+
+  let items = timer.isRunning || timer.isPaused ? [
+      pause,
+      resume,
+      stop,
+      new RestartTimerParentMenu(
+        startFocus,
+        startShortBreak,
+        startLongBreak
+      ),
+      startCycle,
+      viewHistory
+    ] : [
+    startCycle,
+    startFocus,
+    startShortBreak,
+    startLongBreak,
+    viewHistory
+  ];
+
+  const describe = item => {
+    let descriptor = {
+      title: item.title,
+      visible: item.visible
+    };
+
+    if (item.id) {
+      descriptor.id = item.id;
+    }
+
+    if (item instanceof ParentMenu) {
+      descriptor.children = item.children
+        .filter(child => child.visible)
+        .map(describe);
+    }
+
+    return descriptor;
+  };
+
+  return items.filter(item => item.visible).map(describe);
 }
 
 function createPomodoroMenu(timer) {
@@ -307,7 +451,7 @@ function createPomodoroMenu(timer) {
   let startLongBreak = new StartLongBreakAction(timer);
   let viewHistory = new PomodoroHistoryAction();
 
-  let inactive = new Menu(['browser_action'],
+  let inactive = new Menu(['action'],
     new MenuGroup(
       startCycle,
       startFocus,
@@ -319,7 +463,7 @@ function createPomodoroMenu(timer) {
     )
   );
 
-  let active = new Menu(['browser_action'],
+  let active = new Menu(['action'],
     new MenuGroup(
       pause,
       resume,
@@ -340,5 +484,8 @@ function createPomodoroMenu(timer) {
 }
 
 export {
+  MENU_IDS,
+  createPomodoroMenuItems,
+  dispatchPomodoroMenuCommand,
   createPomodoroMenu
 };
