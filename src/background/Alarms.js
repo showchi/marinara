@@ -53,7 +53,7 @@ async function onAlarm(alarm, { timer, settingsManager }) {
   if (alarm.name === AUTOSTART_ALARM) {
     await onAutostartAlarm(timer, settingsManager);
   } else if (alarm.name === TIMER_EXPIRE_ALARM) {
-    await onTimerExpireAlarm(timer);
+    await onTimerExpireAlarm(alarm, timer);
   }
 }
 
@@ -78,8 +78,13 @@ async function onAutostartAlarm(timer, settingsManager) {
   });
 }
 
-async function onTimerExpireAlarm(timer) {
+async function onTimerExpireAlarm(alarm, timer) {
   if (!timer.isRunning) {
+    return;
+  }
+
+  if (alarm.scheduledTime >= timer.status.expiresAt) {
+    timer.expire();
     return;
   }
 
