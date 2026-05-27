@@ -409,6 +409,45 @@ describe('PomodoroTimer', () => {
     assert.isAtLeast(timer.remaining, 19 * 60);
   });
 
+  it('waits for async expiration observers when manually expired', async () => {
+    let settings = {
+      focus: { duration: 10 },
+      shortBreak: { duration: 0 },
+      longBreak: { duration: 0, interval: null }
+    };
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let completed = false;
+    timer.observe({
+      onExpire: async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        completed = true;
+      }
+    });
+
+    timer.start();
+    await timer.expire();
+
+    assert.isTrue(completed);
+  });
+
+  it('preserves the EventEmitter listener context when manually expired', async () => {
+    let settings = {
+      focus: { duration: 10 },
+      shortBreak: { duration: 0 },
+      longBreak: { duration: 0, interval: null }
+    };
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let context = null;
+    timer.on('expire', function() {
+      context = this;
+    });
+
+    timer.start();
+    await timer.expire();
+
+    assert.equal(context, timer);
+  });
+
   it('works across 100 cycles', async function() {
     // Extend default timeout for this test.
     this.timeout(10000);

@@ -153,7 +153,7 @@ class Timer extends EventEmitter
   }
 
   setExpireTimeout(seconds) {
-    this.expireTimeout = setTimeout(() => {
+    this.expireTimeout = setTimeout(async () => {
       clearInterval(this.tickInterval);
       clearTimeout(this.expireTimeout);
 
@@ -164,7 +164,7 @@ class Timer extends EventEmitter
 
       this.state = TimerState.Stopped;
 
-      this.emit('expire', this.status);
+      await this.emitAsync('expire', this.status);
     }, seconds * 1000);
   }
 
@@ -208,6 +208,11 @@ class Timer extends EventEmitter
     }
 
     this.emit('tick', this.status);
+  }
+
+  async emitAsync(event, ...args) {
+    let listeners = this.rawListeners ? this.rawListeners(event) : this.listeners(event);
+    await Promise.all(listeners.map(listener => listener.apply(this, args)));
   }
 
   toJSON() {
@@ -421,7 +426,7 @@ class PomodoroTimer extends EventEmitter
     }
 
     this.advanceTimer = true;
-    this.emit('expire', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+    return this.emitAsync('expire', { phase: this.phase, nextPhase: this.nextPhase, ...status });
   }
 
   expire() {
@@ -434,7 +439,12 @@ class PomodoroTimer extends EventEmitter
     this.timer.checkpointElapsed = this.timer.duration;
     this.timer.state = TimerState.Stopped;
 
-    this.onExpire(this.timer.status);
+    return this.onExpire(this.timer.status);
+  }
+
+  async emitAsync(event, ...args) {
+    let listeners = this.rawListeners ? this.rawListeners(event) : this.listeners(event);
+    await Promise.all(listeners.map(listener => listener.apply(this, args)));
   }
 
   restore(snapshot, { arm = true } = {}) {

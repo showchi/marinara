@@ -19,18 +19,26 @@ class Notification
       type: 'basic',
       title: this.title,
       message: this.message,
-      iconUrl: 'images/128.png',
+      iconUrl: chrome.runtime.getURL('images/128.png'),
       isClickable: true,
       requireInteraction: true,
       buttons: this.buttons.map(b => {
         return {
           title: b.title,
-          iconUrl: 'images/start.png'
+          iconUrl: chrome.runtime.getURL('images/start.png')
         };
       })
     };
 
-    await Chrome.notifications.create(TIMER_EXPIRED_NOTIFICATION, options);
+    try {
+      await Chrome.notifications.create(TIMER_EXPIRED_NOTIFICATION, options);
+    } catch (error) {
+      let fallbackOptions = {
+        ...options,
+        buttons: this.buttons.map(b => ({ title: b.title }))
+      };
+      await Chrome.notifications.create(TIMER_EXPIRED_NOTIFICATION, fallbackOptions);
+    }
   }
 
   close() {

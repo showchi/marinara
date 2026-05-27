@@ -198,25 +198,33 @@ class NotificationObserver
 
     await this.mutex.exclusive(async () => {
       if (settings.notifications.desktop) {
-        this.notification = new Notification(title, messages.join('\n'));
-        this.notification.addButton(buttonText);
-        await this.notification.show();
+        try {
+          this.notification = new Notification(title, messages.join('\n'));
+          this.notification.addButton(buttonText);
+          await this.notification.show();
+        } catch (error) {
+          console.error(error);
+        }
       }
 
       if (settings.notifications.tab) {
-        let phaseId = {
-          [Phase.Focus]: 'focus',
-          [Phase.ShortBreak]: hasLongBreak ? 'short-break' : 'break',
-          [Phase.LongBreak]: 'long-break'
-        }[nextPhase];
+        try {
+          let phaseId = {
+            [Phase.Focus]: 'focus',
+            [Phase.ShortBreak]: hasLongBreak ? 'short-break' : 'break',
+            [Phase.LongBreak]: 'long-break'
+          }[nextPhase];
 
-        this.expiration = await ExpirationPage.show(
-          title,
-          messages,
-          action,
-          pomodorosToday,
-          phaseId
-        );
+          this.expiration = await ExpirationPage.show(
+            title,
+            messages,
+            action,
+            pomodorosToday,
+            phaseId
+          );
+        } catch (error) {
+          console.error(error);
+        }
       }
     });
   }

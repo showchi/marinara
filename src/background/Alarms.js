@@ -77,7 +77,7 @@ async function onAutostartAlarm(timer, settingsManager) {
     type: 'basic',
     title: M.autostart_notification_title,
     message: M.autostart_notification_message,
-    iconUrl: 'images/128.png',
+    iconUrl: chrome.runtime.getURL('images/128.png'),
     isClickable: false,
     requireInteraction: true
   });
@@ -89,7 +89,7 @@ async function onTimerExpireAlarm(alarm, timer) {
   }
 
   if (alarm.scheduledTime >= timer.status.expiresAt) {
-    timer.expire();
+    await timer.expire();
     return;
   }
 
@@ -98,7 +98,7 @@ async function onTimerExpireAlarm(alarm, timer) {
     return;
   }
 
-  timer.expire();
+  await timer.expire();
 }
 
 async function onBadgeUpdateAlarm(timer) {

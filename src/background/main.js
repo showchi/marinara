@@ -40,7 +40,7 @@ chrome.contextMenus.onClicked.addListener(info => {
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  appReady
+  return appReady
     .then(app => Alarms.onAlarm(alarm, app))
     .catch(error => console.error(error));
 });
@@ -100,7 +100,7 @@ async function run() {
   });
 
   if (restored.expired) {
-    timer.expire();
+    await timer.expire();
     await timerStore.save(timer);
   } else {
     timer.arm();
