@@ -75,6 +75,9 @@
       </div>
     </section>
   </div>
+  <div v-else class="loading">
+    <img src="/images/spinner.svg">
+  </div>
 </template>
 
 <style lang="scss">
@@ -185,6 +188,15 @@
   color: #333;
   border-radius: 5px;
 }
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 50px;
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
 .tippy-tooltip {
   opacity: 0.9 !important;
   padding: 10px 17px;
@@ -208,14 +220,20 @@ export default {
       pomodoroClient: new PomodoroClient(),
       stats: null,
       historyStart: null,
-      dayDistributionBucketSize: 30
+      dayDistributionBucketSize: 30,
+      updateStatsPromise: null
     };
   },
-  async mounted() {
+  mounted() {
     this.updateStats();
     this.pomodoroClient.on('expire', () => {
       this.updateStats();
     });
+  },
+  activated() {
+    if (!this.stats) {
+      this.updateStats();
+    }
   },
   beforeDestroy() {
     this.historyClient.dispose();
@@ -260,14 +278,27 @@ export default {
       await this.updateStats();
     },
     async updateStats() {
+      if (this.updateStatsPromise) {
+        return this.updateStatsPromise;
+      }
+
       let now = new Date();
       let start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       // Start at the first Sunday at least 39 weeks (~9 months) ago.
       start.setDate(start.getDate() - 273);
       start.setDate(start.getDate() - start.getDay());
-      this.stats = await this.historyClient.getStats(+start);
-      this.historyStart = start;
+      this.updateStatsPromise = this.historyClient.getStats(+start)
+        .then(stats => {
+          this.stats = stats;
+          this.historyStart = start;
+        })
+        .catch(error => console.error(error))
+        .then(() => {
+          this.updateStatsPromise = null;
+        });
+
+      return this.updateStatsPromise;
     }
   },
   filters: {

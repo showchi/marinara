@@ -7,10 +7,15 @@ function isNoReceiverError(error) {
   ].includes(error.message);
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class ServiceBroker
 {
-  constructor() {
+  constructor({ ownedServices = [] } = {}) {
     this.services = {};
+    this.ownedServices = new Set(ownedServices);
     this.ready = Promise.resolve();
     chrome.runtime.onMessage.addListener(this.onMessage.bind(this));
   }
@@ -35,6 +40,7 @@ class ServiceBroker
   }
 
   register(service) {
+    this.ownedServices.add(service.serviceName);
     this.services[service.serviceName] = service;
     return service;
   }
@@ -42,6 +48,12 @@ class ServiceBroker
   unregister(service) {
     delete this.services[service.serviceName];
     return service;
+  }
+
+  own(...serviceNames) {
+    for (let serviceName of serviceNames) {
+      this.ownedServices.add(serviceName);
+    }
   }
 
   async invoke({ serviceName, methodName, args }) {
@@ -56,6 +68,25 @@ class ServiceBroker
     }
 
     // Service is defined in another context, use sendMessage to call it.
+    return await this.invokeRemote({ serviceName, methodName, args });
+  }
+
+  async invokeRemote({ serviceName, methodName, args }) {
+    let attempts = 0;
+    while (true) {
+      try {
+        return await this.sendInvocation({ serviceName, methodName, args });
+      } catch (error) {
+        attempts++;
+        if (!isNoReceiverError(error) || attempts >= 3) {
+          throw error;
+        }
+        await delay(100 * attempts);
+      }
+    }
+  }
+
+  async sendInvocation({ serviceName, methodName, args }) {
     return await new Promise((resolve, reject) => {
       let message = { serviceName, methodName, args };
       chrome.runtime.sendMessage(message, response => {
@@ -81,11 +112,20 @@ class ServiceBroker
       return;
     }
 
+    if (!this.ownedServices.has(serviceName)) {
+      return;
+    }
+
     (async () => {
       try {
         await this.ready;
         let service = this.services[serviceName];
-        if (!service || !service[methodName]) {
+        if (!service) {
+          respond({ error: `Invalid service request: ${serviceName}.${methodName}.` });
+          return;
+        }
+
+        if (!service[methodName]) {
           respond({ error: `Invalid service request: ${serviceName}.${methodName}.` });
           return;
         }

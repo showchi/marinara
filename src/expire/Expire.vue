@@ -167,11 +167,31 @@ export default {
     document.body.removeEventListener('keypress', this.onKeyPress);
   },
   methods: {
-    startSession() {
-      PomodoroClient.once.start();
+    async startSession() {
+      try {
+        await PomodoroClient.once.start();
+        this.closePage();
+      } catch (error) {
+        console.error(error);
+      }
     },
-    showHistoryPage() {
-      OptionsClient.once.showHistoryPage();
+    closePage() {
+      chrome.tabs.getCurrent(tab => {
+        let lastError = chrome.runtime.lastError;
+        if (lastError || !tab || !tab.id) {
+          window.close();
+          return;
+        }
+
+        chrome.tabs.remove(tab.id, () => {});
+      });
+    },
+    async showHistoryPage() {
+      try {
+        await OptionsClient.once.showHistoryPage();
+      } catch (error) {
+        console.error(error);
+      }
     },
     onKeyPress(e) {
       // On Enter key press, start next session.

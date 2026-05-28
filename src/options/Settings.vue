@@ -181,6 +181,9 @@
       </div>
     </transition>
   </form>
+  <div v-else class="loading">
+    <img src="/images/spinner.svg">
+  </div>
 </template>
 
 <style lang="scss">
@@ -241,6 +244,15 @@ input[type="number"] {
     }
   }
 }
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 50px;
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
 </style>
 
 <script>
@@ -263,21 +275,45 @@ export default {
       notificationSounds: null,
       timerSounds: null,
       timerSound: null,
+      loadSettingsPromise: null,
       timerSoundMutex: new Mutex()
     };
   },
-  async mounted() {
-    [this.settings, this.notificationSounds, this.timerSounds] = await Promise.all([
-      this.settingsClient.getSettings(),
-      this.soundsClient.getNotificationSounds(),
-      this.soundsClient.getTimerSounds()
-    ]);
+  mounted() {
+    this.loadSettings();
+  },
+  activated() {
+    if (!this.settings) {
+      this.loadSettings();
+    }
   },
   beforeDestroy() {
     this.settingsClient.dispose();
     this.soundsClient.dispose();
   },
   methods: {
+    async loadSettings() {
+      if (this.loadSettingsPromise) {
+        return this.loadSettingsPromise;
+      }
+
+      this.loadSettingsPromise = Promise.all([
+        this.settingsClient.getSettings(),
+        this.soundsClient.getNotificationSounds(),
+        this.soundsClient.getTimerSounds()
+      ])
+        .then(([settings, notificationSounds, timerSounds]) => {
+          this.settings = settings;
+          this.notificationSounds = notificationSounds;
+          this.timerSounds = timerSounds;
+        })
+        .catch(error => console.error(error))
+        .then(() => {
+          this.loadSettingsPromise = null;
+        });
+
+      return this.loadSettingsPromise;
+    },
     async saveSettings() {
       try {
         await this.settingsClient.setSettings(this.settings);

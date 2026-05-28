@@ -6,6 +6,7 @@ import StorageManager from './StorageManager';
 import { SettingsSchema, PersistentSettings } from './Settings';
 import TimerStateStore from './TimerStateStore';
 import { HistoryService, SoundsService, SettingsService, PomodoroService, OptionsService } from './Services';
+import { ExpirationService } from './Expiration';
 import { BadgeObserver, TimerSoundObserver, ExpirationSoundObserver, NotificationObserver, HistoryObserver, CountdownObserver, MenuObserver } from './Observers';
 import { ServiceBroker } from '../Service';
 import * as Alarms from './Alarms';
@@ -13,6 +14,14 @@ import { TIMER_EXPIRED_NOTIFICATION } from './Notification';
 
 // Register extension event listeners synchronously during service worker startup.
 ServiceBroker.instance;
+ServiceBroker.instance.own(
+  HistoryService.serviceName,
+  SoundsService.serviceName,
+  SettingsService.serviceName,
+  PomodoroService.serviceName,
+  OptionsService.serviceName,
+  ExpirationService.serviceName
+);
 
 chrome.runtime.onUpdateAvailable.addListener(() => {
   // We must listen to (but do nothing with) the onUpdateAvailable event in order to

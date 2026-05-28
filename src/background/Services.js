@@ -111,7 +111,7 @@ class PomodoroService extends Service
   }
 
   async start() {
-    this.timer.start();
+    setTimeout(() => this.timer.start(), 0);
   }
 
   async pause() {

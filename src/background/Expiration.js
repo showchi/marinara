@@ -3,6 +3,10 @@ import { Service, ServiceBroker } from '../Service';
 
 class ExpirationService extends Service
 {
+  static get serviceName() {
+    return 'ExpirationService';
+  }
+
   constructor(properties, page) {
     super();
     this.properties = properties;
@@ -52,5 +56,6 @@ const ExpirationClient = ExpirationService.proxy;
 
 export {
   ExpirationPage,
+  ExpirationService,
   ExpirationClient
 };
