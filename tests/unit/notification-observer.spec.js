@@ -4,9 +4,15 @@ let NotificationObserver;
 let Phase;
 let PomodoroTimer;
 
+function flushPromises() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 describe('NotificationObserver', () => {
   let notifications;
   let tabs;
+  let removedTabs;
+  let pendingTabRemovals;
   let notificationErrors;
   let consoleError;
 
@@ -38,6 +44,8 @@ describe('NotificationObserver', () => {
   beforeEach(() => {
     notifications = [];
     tabs = [];
+    removedTabs = [];
+    pendingTabRemovals = [];
     notificationErrors = [];
     consoleError = console.error;
     console.error = () => {};
@@ -61,11 +69,15 @@ describe('NotificationObserver', () => {
         }
       },
       tabs: {
-        query: (queryInfo, callback) => callback([]),
+        query: (queryInfo, callback) => callback(tabs),
         create: (options, callback) => {
           let tab = { id: tabs.length + 1, windowId: 1, ...options };
           tabs.push(tab);
           callback(tab);
+        },
+        remove: (tabId, callback = () => {}) => {
+          removedTabs.push(tabId);
+          pendingTabRemovals.push(callback);
         },
         onRemoved: {
           addListener: () => {},
@@ -138,5 +150,47 @@ describe('NotificationObserver', () => {
     assert.lengthOf(notifications, 2);
     assert.lengthOf(tabs, 1);
     assert.equal(tabs[0].url, 'chrome-extension://test/modules/expire.html');
+  });
+
+  it('closes an existing expiration tab by URL when starting after observer state was lost', async () => {
+    let timer = new PomodoroTimer(settings, Phase.ShortBreak);
+    let history = {
+      countToday: async () => 1
+    };
+    let observer = new NotificationObserver(timer, settings, history);
+    tabs.push(
+      { id: 7, url: 'chrome-extension://test/modules/expire.html' },
+      { id: 8, url: 'chrome-extension://test/modules/options.html' }
+    );
+
+    let cleanup = observer.onStart();
+    await flushPromises();
+    pendingTabRemovals.shift()();
+    await cleanup;
+
+    assert.deepEqual(removedTabs, [7]);
+  });
+
+  it('waits for expiration tab removal before completing start cleanup', async () => {
+    let timer = new PomodoroTimer(settings, Phase.ShortBreak);
+    let history = {
+      countToday: async () => 1
+    };
+    let observer = new NotificationObserver(timer, settings, history);
+    tabs.push({ id: 7, url: 'chrome-extension://test/modules/expire.html' });
+
+    let cleanupComplete = false;
+    let cleanup = observer.onStart().then(() => {
+      cleanupComplete = true;
+    });
+    await flushPromises();
+
+    assert.deepEqual(removedTabs, [7]);
+    assert.isFalse(cleanupComplete);
+
+    pendingTabRemovals.shift()();
+    await cleanup;
+
+    assert.isTrue(cleanupComplete);
   });
 });

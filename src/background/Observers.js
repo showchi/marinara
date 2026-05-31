@@ -146,15 +146,17 @@ class NotificationObserver
   }
 
   onStart() {
-    this.mutex.exclusive(async () => {
+    return this.mutex.exclusive(async () => {
       if (this.notification) {
         this.notification.close();
         this.notification = null;
       }
 
       if (this.expiration) {
-        this.expiration.close();
+        await this.expiration.close();
         this.expiration = null;
+      } else {
+        await ExpirationPage.closeOpenPages();
       }
     });
   }

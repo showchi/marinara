@@ -1,5 +1,6 @@
 import { SingletonPage, PageHost } from './SingletonPage';
 import { Service, ServiceBroker } from '../Service';
+import Chrome from '../Chrome';
 
 class ExpirationService extends Service
 {
@@ -28,6 +29,15 @@ class ExpirationPage
     return new ExpirationPage(page, title, messages, action, pomodoros, phase);
   }
 
+  static async closeOpenPages() {
+    let url = chrome.runtime.getURL('modules/expire.html');
+    let tabs = await Chrome.tabs.query({});
+
+    await Promise.all(tabs
+      .filter(tab => tab.url === url)
+      .map(tab => Chrome.tabs.remove(tab.id)));
+  }
+
   constructor(page, title, messages, action, pomodoros, phase) {
     this.page = page;
 
@@ -47,8 +57,8 @@ class ExpirationPage
     });
   }
 
-  close() {
-    this.page.close();
+  async close() {
+    await this.page.close();
   }
 }
 

@@ -111,6 +111,12 @@ class Tabs
       chrome.tabs.query(queryInfo, callback);
     });
   }
+
+  static async remove(tabId) {
+    return promise(callback => {
+      chrome.tabs.remove(tabId, callback);
+    });
+  }
 }
 
 class Windows

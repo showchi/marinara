@@ -77,12 +77,12 @@ class SingletonPage
     focusTab(this.tabId);
   }
 
-  close() {
+  async close() {
     if (!this.tabId) {
       return;
     }
 
-    chrome.tabs.remove(this.tabId, () => {});
+    await Chrome.tabs.remove(this.tabId);
   }
 }
 
