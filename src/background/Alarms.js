@@ -71,7 +71,7 @@ async function onAutostartAlarm(timer, settingsManager) {
   }
 
   // Start a new cycle.
-  timer.startCycle();
+  await timer.startCycle();
 
   Chrome.notifications.create({
     type: 'basic',

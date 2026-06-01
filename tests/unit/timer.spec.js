@@ -65,6 +65,100 @@ describe('PomodoroTimer', () => {
     assert.equal(timer.nextPhase, Phase.LongBreak);
   });
 
+  it('waits for async pause observers before resolving pause', async () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let finishPauseObserver = null;
+    let observerFinished = false;
+    timer.observe({
+      onPause: async () => {
+        await new Promise(resolve => {
+          finishPauseObserver = resolve;
+        });
+        observerFinished = true;
+      }
+    });
+
+    timer.start();
+    let pauseComplete = false;
+    let pause = timer.pause().then(() => {
+      pauseComplete = true;
+    });
+    await Promise.resolve();
+
+    assert.isFalse(pauseComplete);
+    assert.isFalse(observerFinished);
+
+    finishPauseObserver();
+    await pause;
+
+    assert.isTrue(pauseComplete);
+    assert.isTrue(observerFinished);
+  });
+
+  it('waits for stop observers before starting during restart', async () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let finishStopObserver = null;
+    let events = [];
+    timer.observe({
+      onStop: async () => {
+        events.push('stop:start');
+        await new Promise(resolve => {
+          finishStopObserver = resolve;
+        });
+        events.push('stop:finish');
+      },
+      onStart: async () => {
+        events.push('start');
+      }
+    });
+
+    await timer.start();
+    events = [];
+    let restart = timer.restart();
+    await Promise.resolve();
+
+    assert.deepEqual(events, ['stop:start']);
+
+    finishStopObserver();
+    await restart;
+
+    assert.deepEqual(events, ['stop:start', 'stop:finish', 'start']);
+  });
+
+  it('waits for old timer stop observers before starting a switched phase', async () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let finishStopObserver = null;
+    let events = [];
+    timer.observe({
+      onStop: async ({ phase }) => {
+        events.push(`stop:start:${phase}`);
+        await new Promise(resolve => {
+          finishStopObserver = resolve;
+        });
+        events.push(`stop:finish:${phase}`);
+      },
+      onStart: async ({ phase }) => {
+        events.push(`start:${phase}`);
+      }
+    });
+
+    await timer.start();
+    events = [];
+    let startShortBreak = timer.startShortBreak();
+    await Promise.resolve();
+
+    assert.deepEqual(events, [`stop:start:${Phase.ShortBreak}`]);
+
+    finishStopObserver();
+    await startShortBreak;
+
+    assert.deepEqual(events, [
+      `stop:start:${Phase.ShortBreak}`,
+      `stop:finish:${Phase.ShortBreak}`,
+      `start:${Phase.ShortBreak}`
+    ]);
+  });
+
   it('restores active timer duration from the snapshot after settings change', () => {
     let originalSettings = {
       focus: { duration: 25 },
@@ -405,7 +499,7 @@ describe('PomodoroTimer', () => {
     assert.isAtLeast(timer.remaining, 9 * 60);
 
     settings.focus.duration = 20;
-    timer.restart();
+    await timer.restart();
     assert.isAtLeast(timer.remaining, 19 * 60);
   });
 

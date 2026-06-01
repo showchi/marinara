@@ -31,13 +31,13 @@ chrome.runtime.onUpdateAvailable.addListener(() => {
 });
 
 chrome.action.onClicked.addListener(() => {
-  appReady.then(({ timer }) => {
+  return appReady.then(async ({ timer }) => {
     if (timer.isRunning) {
-      timer.pause();
+      await timer.pause();
     } else if (timer.isPaused) {
-      timer.resume();
+      await timer.resume();
     } else {
-      timer.start();
+      await timer.start();
     }
   }).catch(error => console.error(error));
 });
@@ -59,9 +59,9 @@ function startFromNotification(notificationId) {
     return;
   }
 
-  appReady
-    .then(({ timer }) => {
-      timer.start();
+  return appReady
+    .then(async ({ timer }) => {
+      await timer.start();
       chrome.notifications.clear(notificationId);
     })
     .catch(error => console.error(error));

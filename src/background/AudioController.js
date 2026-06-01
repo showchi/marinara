@@ -5,6 +5,7 @@ class AudioController
   constructor() {
     this.createDocumentPromise = null;
     this.timerSound = null;
+    this.commandQueue = Promise.resolve();
   }
 
   async play(filename) {
@@ -21,20 +22,42 @@ class AudioController
   }
 
   async stopTimerSound() {
-    await this.send({ command: 'stopTimerSound' });
+    await this.sendIfDocumentExists({ command: 'stopTimerSound' });
   }
 
   async pauseTimerSound() {
-    await this.send({ command: 'pauseTimerSound' });
+    await this.sendIfDocumentExists({ command: 'pauseTimerSound' });
   }
 
   async closeTimerSound() {
     this.timerSound = null;
-    await this.send({ command: 'closeTimerSound' });
+    await this.sendIfDocumentExists({ command: 'closeTimerSound' });
   }
 
   async send(message) {
-    await this.ensureDocument();
+    return await this.enqueueCommand(async () => {
+      await this.ensureDocument();
+      return await this.sendMessage(message);
+    });
+  }
+
+  async sendIfDocumentExists(message) {
+    return await this.enqueueCommand(async () => {
+      if (!await this.hasDocument()) {
+        return;
+      }
+
+      return await this.sendMessage(message);
+    });
+  }
+
+  async enqueueCommand(fn) {
+    let command = this.commandQueue.then(fn, fn);
+    this.commandQueue = command.catch(() => {});
+    return await command;
+  }
+
+  async sendMessage(message) {
     let response = await chrome.runtime.sendMessage({
       target: TARGET,
       ...message
@@ -78,10 +101,16 @@ class AudioController
   }
 
   async resumeTimerSound() {
-    await this.send({
+    let message = {
       command: 'resumeTimerSound',
       timerSound: this.timerSound
-    });
+    };
+
+    if (this.timerSound) {
+      await this.send(message);
+    } else {
+      await this.sendIfDocumentExists(message);
+    }
   }
 }
 

@@ -189,7 +189,7 @@ class StartFocusingAction extends Action
   }
 
   run() {
-    this.timer.startFocus();
+    return this.timer.startFocus();
   }
 }
 
@@ -213,7 +213,7 @@ class StartShortBreakAction extends Action
   }
 
   run() {
-    this.timer.startShortBreak();
+    return this.timer.startShortBreak();
   }
 }
 
@@ -237,7 +237,7 @@ class StartLongBreakAction extends Action
   }
 
   run() {
-    this.timer.startLongBreak();
+    return this.timer.startLongBreak();
   }
 }
 
@@ -261,7 +261,7 @@ class StopTimerAction extends Action
   }
 
   run() {
-    this.timer.stop();
+    return this.timer.stop();
   }
 }
 
@@ -285,7 +285,7 @@ class PauseTimerAction extends Action
   }
 
   run() {
-    this.timer.pause();
+    return this.timer.pause();
   }
 }
 
@@ -309,7 +309,7 @@ class ResumeTimerAction extends Action
   }
 
   run() {
-    this.timer.resume();
+    return this.timer.resume();
   }
 }
 
@@ -360,7 +360,7 @@ class StartPomodoroCycleAction extends Action
   }
 
   run() {
-    this.timer.startCycle();
+    return this.timer.startCycle();
   }
 }
 

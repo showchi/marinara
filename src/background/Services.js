@@ -111,19 +111,19 @@ class PomodoroService extends Service
   }
 
   async start() {
-    setTimeout(() => this.timer.start(), 0);
+    setTimeout(() => Promise.resolve(this.timer.start()).catch(error => console.error(error)), 0);
   }
 
   async pause() {
-    this.timer.pause();
+    await this.timer.pause();
   }
 
   async resume() {
-    this.timer.resume();
+    await this.timer.resume();
   }
 
   async restart() {
-    this.timer.restart();
+    await this.timer.restart();
   }
 
   async getStatus() {

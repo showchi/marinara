@@ -113,8 +113,15 @@ class Tabs
   }
 
   static async remove(tabId) {
-    return promise(callback => {
-      chrome.tabs.remove(tabId, callback);
+    return new Promise((resolve, reject) => {
+      chrome.tabs.remove(tabId, () => {
+        const err = chrome.runtime.lastError;
+        if (!err || (err.message || '').startsWith('No tab with id:')) {
+          resolve();
+        } else {
+          reject(new ChromeError(err.message));
+        }
+      });
     });
   }
 }

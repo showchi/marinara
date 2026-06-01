@@ -85,7 +85,7 @@ class Timer extends EventEmitter
     };
   }
 
-  start() {
+  async start() {
     if (!this.isStopped) {
       return;
     }
@@ -96,10 +96,10 @@ class Timer extends EventEmitter
     this.state = TimerState.Running;
     this.checkpointStartAt = this.now();
 
-    this.emit('start', this.status);
+    await this.emitAsync('start', this.status);
   }
 
-  stop() {
+  async stop() {
     if (this.isStopped) {
       return;
     }
@@ -114,10 +114,10 @@ class Timer extends EventEmitter
 
     this.state = TimerState.Stopped;
 
-    this.emit('stop', this.status);
+    await this.emitAsync('stop', this.status);
   }
 
-  pause() {
+  async pause() {
     if (!this.isRunning) {
       return;
     }
@@ -130,10 +130,10 @@ class Timer extends EventEmitter
 
     this.state = TimerState.Paused;
 
-    this.emit('pause', this.status);
+    await this.emitAsync('pause', this.status);
   }
 
-  resume() {
+  async resume() {
     if (!this.isPaused) {
       return;
     }
@@ -144,12 +144,12 @@ class Timer extends EventEmitter
     this.state = TimerState.Running;
     this.checkpointStartAt = this.now();
 
-    this.emit('resume', this.status);
+    await this.emitAsync('resume', this.status);
   }
 
-  restart() {
-    this.stop();
-    this.start();
+  async restart() {
+    await this.stop();
+    await this.start();
   }
 
   setExpireTimeout(seconds) {
@@ -234,6 +234,8 @@ class PomodoroTimer extends EventEmitter
     this.now = now;
     this.advanceTimer = false;
     this.pomodoros = 0;
+    this.timerCleanup = Promise.resolve();
+    this.hasTimerCleanup = false;
     this.settings = settings;
     this.phase = initialPhase;
   }
@@ -246,8 +248,22 @@ class PomodoroTimer extends EventEmitter
     }[this.phase];
 
     if (this.timer) {
-      this.timer.stop();
-      this.timer.removeAllListeners();
+      let oldTimer = this.timer;
+      if (oldTimer.isStopped) {
+        oldTimer.removeAllListeners();
+      } else {
+        let cleanup = this.timerCleanup
+          .then(() => oldTimer.stop())
+          .catch(error => console.error(error))
+          .then(() => oldTimer.removeAllListeners());
+        let queuedCleanup = cleanup.finally(() => {
+          if (this.timerCleanup === queuedCleanup) {
+            this.hasTimerCleanup = false;
+          }
+        });
+        this.timerCleanup = queuedCleanup;
+        this.hasTimerCleanup = true;
+      }
     }
 
     this.timer = new this.timerType(Math.floor(duration * 60), 60, this.now);
@@ -337,39 +353,50 @@ class PomodoroTimer extends EventEmitter
   }
 
   dispose() {
-    this.timer.stop();
-    this.timer.removeAllListeners();
+    let oldTimer = this.timer;
+    if (oldTimer.isStopped) {
+      oldTimer.removeAllListeners();
+    } else {
+      this.timerCleanup = this.timerCleanup
+        .then(() => oldTimer.stop())
+        .catch(error => console.error(error))
+        .then(() => oldTimer.removeAllListeners());
+      this.hasTimerCleanup = true;
+    }
   }
 
   startCycle() {
     this.pomodoros = 0;
     this.phase = Phase.Focus;
-    this.start();
+    return this.start();
   }
 
   startFocus() {
     this.phase = Phase.Focus;
-    this.start();
+    return this.start();
   }
 
   startShortBreak() {
     this.phase = Phase.ShortBreak;
-    this.start();
+    return this.start();
   }
 
   startLongBreak() {
     this.phase = Phase.LongBreak;
-    this.start();
+    return this.start();
   }
 
-  start() {
+  async start() {
     if (this.advanceTimer) {
       this._phase = this.nextPhase;
       this.advanceTimer = false;
     }
 
     this._updateTimer();
-    this.timer.start();
+    if (this.hasTimerCleanup) {
+      await this.timerCleanup;
+    }
+    await this.timer.start();
   }
 
   pause() {
@@ -384,11 +411,11 @@ class PomodoroTimer extends EventEmitter
     return this.timer.resume();
   }
 
-  restart() {
+  async restart() {
     // Calling timer.restart directly would ignore any settings changes, so
     // so we call start then stop to ensure we pick up on the changes.
-    this.stop();
-    return this.start();
+    await this.stop();
+    await this.start();
   }
 
   observe(observer) {
@@ -401,19 +428,19 @@ class PomodoroTimer extends EventEmitter
   }
 
   onStart(status) {
-    this.emit('start', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+    return this.emitAsync('start', { phase: this.phase, nextPhase: this.nextPhase, ...status });
   }
 
   onStop(status) {
-    this.emit('stop', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+    return this.emitAsync('stop', { phase: this.phase, nextPhase: this.nextPhase, ...status });
   }
 
   onPause(status) {
-    this.emit('pause', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+    return this.emitAsync('pause', { phase: this.phase, nextPhase: this.nextPhase, ...status });
   }
 
   onResume(status) {
-    this.emit('resume', { phase: this.phase, nextPhase: this.nextPhase, ...status });
+    return this.emitAsync('resume', { phase: this.phase, nextPhase: this.nextPhase, ...status });
   }
 
   onTick(status) {
