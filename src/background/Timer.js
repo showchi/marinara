@@ -234,6 +234,7 @@ class PomodoroTimer extends EventEmitter
     this.now = now;
     this.advanceTimer = false;
     this.pomodoros = 0;
+    this.pomodoroDay = this._pomodoroDay();
     this.timerCleanup = Promise.resolve();
     this.hasTimerCleanup = false;
     this.settings = settings;
@@ -293,7 +294,7 @@ class PomodoroTimer extends EventEmitter
       return Phase.ShortBreak;
     }
 
-    let completedPomodoros = this.pomodoros + (this.isRunning || this.isPaused ? 1 : 0);
+    let completedPomodoros = this._pomodorosToday() + (this.isRunning || this.isPaused ? 1 : 0);
     if (this._pomodorosUntilLongBreak(completedPomodoros) === 0) {
       return Phase.LongBreak;
     } else {
@@ -306,7 +307,7 @@ class PomodoroTimer extends EventEmitter
   }
 
   get pomodorosUntilLongBreak() {
-    return this._pomodorosUntilLongBreak(this.pomodoros);
+    return this._pomodorosUntilLongBreak(this._pomodorosToday());
   }
 
   _pomodorosUntilLongBreak(pomodoros) {
@@ -316,6 +317,27 @@ class PomodoroTimer extends EventEmitter
     }
 
     return interval - ((pomodoros - 1) % interval) - 1;
+  }
+
+  _pomodoroDay(timestamp = this.now()) {
+    let date = new Date(timestamp);
+    date.setHours(0);
+    date.setMinutes(0);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+    return +date;
+  }
+
+  _pomodorosToday() {
+    return this.pomodoroDay === this._pomodoroDay() ? this.pomodoros : 0;
+  }
+
+  _resetPomodorosIfNewDay() {
+    let today = this._pomodoroDay();
+    if (this.pomodoroDay !== today) {
+      this.pomodoros = 0;
+      this.pomodoroDay = today;
+    }
   }
 
   get remaining() {
@@ -347,6 +369,7 @@ class PomodoroTimer extends EventEmitter
       phase: this.phase,
       nextPhase: this.nextPhase,
       pomodoros: this.pomodoros,
+      pomodoroDay: this.pomodoroDay,
       advanceTimer: this.advanceTimer,
       ...this.timer.status
     };
@@ -367,6 +390,7 @@ class PomodoroTimer extends EventEmitter
 
   startCycle() {
     this.pomodoros = 0;
+    this.pomodoroDay = this._pomodoroDay();
     this.phase = Phase.Focus;
     return this.start();
   }
@@ -449,6 +473,7 @@ class PomodoroTimer extends EventEmitter
 
   onExpire(status) {
     if (this.phase === Phase.Focus) {
+      this._resetPomodorosIfNewDay();
       this.pomodoros++;
     }
 
@@ -478,6 +503,10 @@ class PomodoroTimer extends EventEmitter
     this._phase = enumValue(Phase, snapshot.phase);
     this.advanceTimer = !!snapshot.advanceTimer;
     this.pomodoros = snapshot.pomodoros || 0;
+    this.pomodoroDay =
+      snapshot.pomodoroDay ||
+      (snapshot.checkpointStartAt && this._pomodoroDay(snapshot.checkpointStartAt)) ||
+      null;
     this._updateTimer();
     this.timer.restore(snapshot, { arm });
   }

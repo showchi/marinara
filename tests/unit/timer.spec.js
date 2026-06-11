@@ -65,6 +65,64 @@ describe('PomodoroTimer', () => {
     assert.equal(timer.nextPhase, Phase.LongBreak);
   });
 
+  it('resets the long break cycle on a new local day', async () => {
+    let now = new Date(2026, 0, 10, 23, 30, 0).getTime();
+    let timer = new PomodoroTimer(settings, Phase.Focus, undefined, () => now);
+    timer.pomodoros = 3;
+    timer.start();
+
+    assert.equal(timer.nextPhase, Phase.LongBreak);
+    assert.equal(timer.pomodorosUntilLongBreak, 1);
+
+    now = new Date(2026, 0, 11, 0, 5, 0).getTime();
+
+    assert.equal(timer.nextPhase, Phase.ShortBreak);
+    assert.equal(timer.pomodorosUntilLongBreak, 4);
+
+    await timer.expire();
+
+    assert.equal(timer.pomodoros, 1);
+    assert.equal(timer.nextPhase, Phase.ShortBreak);
+    assert.equal(timer.pomodorosUntilLongBreak, 3);
+  });
+
+  it('uses the snapshot pomodoro day when restoring the long break cycle', () => {
+    let yesterday = new Date(2026, 0, 10, 23, 30, 0).getTime();
+    let today = new Date(2026, 0, 11, 0, 5, 0).getTime();
+    let snapshot = {
+      phase: Phase.Focus.valueOf(),
+      nextPhase: Phase.LongBreak.valueOf(),
+      state: TimerState.Stopped.valueOf(),
+      duration: settings.focus.duration * 60,
+      checkpointStartAt: yesterday,
+      checkpointElapsed: settings.focus.duration * 60,
+      pomodoros: 3
+    };
+
+    let restored = PomodoroTimer.fromJSON(settings, snapshot, undefined, () => today);
+
+    assert.equal(restored.nextPhase, Phase.ShortBreak);
+    assert.equal(restored.pomodorosUntilLongBreak, 4);
+  });
+
+  it('does not treat undated legacy stopped pomodoros as today', () => {
+    let today = new Date(2026, 0, 11, 0, 5, 0).getTime();
+    let snapshot = {
+      phase: Phase.Focus.valueOf(),
+      nextPhase: Phase.LongBreak.valueOf(),
+      state: TimerState.Stopped.valueOf(),
+      duration: settings.focus.duration * 60,
+      checkpointStartAt: null,
+      checkpointElapsed: 0,
+      pomodoros: 3
+    };
+
+    let restored = PomodoroTimer.fromJSON(settings, snapshot, undefined, () => today);
+
+    assert.equal(restored.nextPhase, Phase.ShortBreak);
+    assert.equal(restored.pomodorosUntilLongBreak, 4);
+  });
+
   it('waits for async pause observers before resolving pause', async () => {
     let timer = new PomodoroTimer(settings, Phase.Focus);
     let finishPauseObserver = null;
