@@ -206,6 +206,12 @@ class Storage
     });
   }
 
+  remove(keys) {
+    return promise(callback => {
+      this.store.remove(keys, callback);
+    });
+  }
+
   static get sync() {
     if (!this._sync) {
       this._sync = new Storage(chrome.storage.sync);
@@ -218,6 +224,13 @@ class Storage
       this._local = new Storage(chrome.storage.local);
     }
     return this._local;
+  }
+
+  static get session() {
+    if (!this._session) {
+      this._session = new Storage(chrome.storage.session);
+    }
+    return this._session;
   }
 }
 

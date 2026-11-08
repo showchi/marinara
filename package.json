@@ -2,10 +2,10 @@
   "name": "marinara",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "dev": "vue-cli-service build --mode development --no-unsafe-inline --dest package/modules --watch",
-    "build": "vue-cli-service build --mode production --no-unsafe-inline --dest package/modules",
-    "test:unit": "vue-cli-service test:unit"
+    "serve": "node scripts/vue-cli.js serve",
+    "dev": "node scripts/vue-cli.js build --mode development --no-unsafe-inline --dest package/modules --watch",
+    "build": "node scripts/vue-cli.js build --mode production --no-unsafe-inline --dest package/modules",
+    "test:unit": "node scripts/vue-cli.js test:unit"
   },
   "dependencies": {
     "d3": "^5.0.0",
@@ -22,7 +22,6 @@
     "@vue/test-utils": "^1.0.3",
     "chai": "^4.2.0",
     "filemanager-webpack-plugin": "^2.0.5",
-    "node-sass": "^7.0.0",
     "sass": "1.69.5",
     "sass-loader": "^9.0.3",
     "vue-template-compiler": "^2.6.11",

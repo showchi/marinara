@@ -4,7 +4,7 @@ import { createPomodoroMenu } from './Menu';
 import { History } from './History';
 import StorageManager from './StorageManager';
 import { SettingsSchema, PersistentSettings } from './Settings';
-import TimerStateStore from './TimerStateStore';
+import TimerStateStore, { TIMER_STATE_KEY } from './TimerStateStore';
 import { HistoryService, SoundsService, SettingsService, PomodoroService, OptionsService } from './Services';
 import { ExpirationService } from './Expiration';
 import { BadgeObserver, TimerSoundObserver, ExpirationSoundObserver, NotificationObserver, HistoryObserver, CountdownObserver, MenuObserver } from './Observers';
@@ -73,7 +73,10 @@ chrome.notifications.onButtonClicked.addListener(startFromNotification);
 async function run() {
   let settingsManager = new StorageManager(new SettingsSchema(), Chrome.storage.sync);
   let settings = await PersistentSettings.create(settingsManager);
-  let timerStore = new TimerStateStore({ settings, storage: Chrome.storage.local });
+  // Keep timers across worker restarts, but not across browser sessions.
+  let timerStore = new TimerStateStore({ settings, storage: Chrome.storage.session });
+  // Discard snapshots written by earlier MV3 versions without touching history.
+  await Chrome.storage.local.remove(TIMER_STATE_KEY);
   let restored = await timerStore.load({ processExpired: false, arm: false });
   let timer = restored.timer;
   let history = new History();

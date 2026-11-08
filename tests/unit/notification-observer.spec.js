@@ -69,7 +69,8 @@ describe('NotificationObserver', () => {
         }
       },
       tabs: {
-        query: (queryInfo, callback) => callback(tabs),
+        // The retained tabs permission makes tab URLs available after worker restarts.
+        query: (queryInfo, callback) => callback(tabs.map(tab => ({ ...tab }))),
         create: (options, callback) => {
           let tab = { id: tabs.length + 1, windowId: 1, ...options };
           tabs.push(tab);
@@ -169,6 +170,36 @@ describe('NotificationObserver', () => {
     await cleanup;
 
     assert.deepEqual(removedTabs, [7]);
+  });
+
+  it('shows both reminders without a completion count when history cannot be read', async () => {
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let observer = new NotificationObserver(timer, settings, {
+      countToday: async () => { throw new Error('History unavailable'); }
+    });
+
+    await observer.onExpire({ phase: Phase.Focus, nextPhase: Phase.ShortBreak });
+
+    assert.lengthOf(notifications, 1);
+    assert.equal(notifications[0].options.message, '');
+    assert.lengthOf(tabs, 1);
+    assert.isNull(observer.expiration.service.properties.pomodoros);
+    assert.isEmpty(observer.expiration.service.properties.messages);
+  });
+
+  it('keeps the desktop reminder when creating the expiration tab fails', async () => {
+    chrome.tabs.create = (options, callback) => {
+      chrome.runtime.lastError = { message: 'Tab creation failed' };
+      callback();
+      chrome.runtime.lastError = null;
+    };
+    let timer = new PomodoroTimer(settings, Phase.Focus);
+    let observer = new NotificationObserver(timer, settings, { countToday: async () => 1 });
+
+    await observer.onExpire({ phase: Phase.Focus, nextPhase: Phase.ShortBreak });
+
+    assert.lengthOf(notifications, 1);
+    assert.isNull(observer.expiration);
   });
 
   it('waits for expiration tab removal before completing start cleanup', async () => {

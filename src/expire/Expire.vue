@@ -5,7 +5,7 @@
     <button @click.prevent="startSession" class="button start-session" :class="phase">
       {{ action }}
     </button>
-    <div class="pomodoros-today">
+    <div class="pomodoros-today" v-if="pomodoroCount !== null">
       <p class="pomodoros">
         <i v-for="_ of new Array(pomodoroCount)" class="icon-circle"></i>
       </p>

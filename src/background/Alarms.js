@@ -78,7 +78,6 @@ async function onAutostartAlarm(timer, settingsManager) {
     title: M.autostart_notification_title,
     message: M.autostart_notification_message,
     iconUrl: chrome.runtime.getURL('images/128.png'),
-    isClickable: false,
     requireInteraction: true
   });
 }

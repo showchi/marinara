@@ -20,7 +20,6 @@ class Notification
       title: this.title,
       message: this.message,
       iconUrl: chrome.runtime.getURL('images/128.png'),
-      isClickable: true,
       requireInteraction: true,
       buttons: this.buttons.map(b => {
         return {

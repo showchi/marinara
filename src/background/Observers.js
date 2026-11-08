@@ -193,8 +193,14 @@ class NotificationObserver
       messages.push(M.pomodoros_until_long_break(pomodoroCount(remaining)));
     }
 
-    let pomodorosToday = await this.history.countToday();
-    messages.push(M.pomodoros_completed_today(pomodoroCount(pomodorosToday)));
+    let pomodorosToday = null;
+    try {
+      pomodorosToday = await this.history.countToday();
+      messages.push(M.pomodoros_completed_today(pomodoroCount(pomodorosToday)));
+    } catch (error) {
+      // Statistics are optional; a storage failure must not suppress reminders.
+      console.error(error);
+    }
 
     messages = messages.filter(m => !!m);
 

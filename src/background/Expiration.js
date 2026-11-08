@@ -31,7 +31,7 @@ class ExpirationPage
 
   static async closeOpenPages() {
     let url = chrome.runtime.getURL('modules/expire.html');
-    let tabs = await Chrome.tabs.query({});
+    let tabs = await SingletonPage.getOpenPages();
 
     await Promise.all(tabs
       .filter(tab => tab.url === url)

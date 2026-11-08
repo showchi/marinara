@@ -16,12 +16,21 @@ function canonical(url) {
 
 class SingletonPage
 {
+  static async getOpenPages() {
+    // Unlike document contexts, tab records include discarded/restored pages.
+    // The tabs permission exposes their URLs on all supported Chrome versions.
+    // Only use our own extension pages for reuse and reminder cleanup.
+    let tabs = await Chrome.tabs.query({});
+    let extensionUrl = chrome.runtime.getURL('');
+    return tabs.filter(tab => tab.url && tab.url.startsWith(extensionUrl));
+  }
+
   static async show(url, host, properties = {}) {
     // Search existing extension pages to see if page is already open.
     let targetUrl = new URL(url);
     let targetCanonical = canonical(targetUrl);
 
-    let tabs = await Chrome.tabs.query({});
+    let tabs = await this.getOpenPages();
     for (let tab of tabs) {
       if (!tab.url || canonical(new URL(tab.url)) !== targetCanonical) {
         continue;

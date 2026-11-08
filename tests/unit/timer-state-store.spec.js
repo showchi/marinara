@@ -1,5 +1,6 @@
 import { assert } from 'chai';
 import { Phase, TimerState } from '@/background/Timer';
+import Chrome from '@/Chrome';
 
 function loadTimerStateStore() {
   let module;
@@ -112,5 +113,96 @@ describe('TimerStateStore', () => {
     assert.equal(restored.timer.phase, Phase.Focus);
     assert.equal(restored.timer.state, TimerState.Stopped);
     assert.equal(restored.timer.remaining, 10 * 60);
+  });
+
+  describe('browser session storage', () => {
+    let originalChrome;
+    let originalSession;
+    let originalLocal;
+    let session;
+    let local;
+
+    function storageArea(data) {
+      return {
+        get: (keys, callback) => {
+          let result = {};
+          for (let key of Array.isArray(keys) ? keys : [keys]) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+              result[key] = data[key];
+            }
+          }
+          callback(result);
+        },
+        set: (values, callback) => {
+          Object.assign(data, JSON.parse(JSON.stringify(values)));
+          callback();
+        },
+        remove: (key, callback) => {
+          delete data[key];
+          callback();
+        }
+      };
+    }
+
+    beforeEach(() => {
+      originalChrome = global.chrome;
+      originalSession = Chrome.storage._session;
+      originalLocal = Chrome.storage._local;
+      delete Chrome.storage._session;
+      delete Chrome.storage._local;
+      session = {};
+      local = {
+        timer: runningFocusSnapshot({ checkpointStartAt: now - 36 * 60 * 60 * 1000 }),
+        pomodoros: [12345],
+        settings: { enabled: true }
+      };
+      global.chrome = {
+        runtime: { lastError: null },
+        storage: { session: storageArea(session), local: storageArea(local) }
+      };
+    });
+
+    afterEach(() => {
+      global.chrome = originalChrome;
+      Chrome.storage._session = originalSession;
+      Chrome.storage._local = originalLocal;
+    });
+
+    it('retains running and paused snapshots when a new worker reads the same session', async () => {
+      let TimerStateStore = loadTimerStateStore();
+      for (let state of [TimerState.Running, TimerState.Paused]) {
+        let first = new TimerStateStore({ settings, storage: Chrome.storage.session, now: () => now });
+        let { timer } = first.restore(runningFocusSnapshot({ state: state.valueOf() }), { arm: false });
+        await first.save(timer);
+
+        let nextWorker = new TimerStateStore({ settings, storage: Chrome.storage.session, now: () => now });
+        let restored = await nextWorker.load({ arm: false });
+
+        assert.equal(restored.timer.state, state);
+        assert.equal(restored.timer.remaining, timer.remaining);
+        assert.isFalse(restored.expired);
+      }
+    });
+
+    it('starts fresh after session storage is cleared even if an old local snapshot exists', async () => {
+      let TimerStateStore = loadTimerStateStore();
+      session.timer = runningFocusSnapshot();
+      // Chrome clears this storage area on browser restart or extension reload.
+      delete session.timer;
+      let nextBrowser = new TimerStateStore({ settings, storage: Chrome.storage.session, now: () => now });
+
+      let restored = await nextBrowser.load({ arm: false });
+
+      assert.isFalse(restored.expired);
+      assert.equal(restored.timer.state, TimerState.Stopped);
+      assert.equal(restored.timer.pomodoros, 0);
+      assert.deepEqual(local.pomodoros, [12345]);
+    });
+
+    it('removes only the legacy timer key, leaving history and other local data intact', async () => {
+      await Chrome.storage.local.remove('timer');
+
+      assert.deepEqual(local, { pomodoros: [12345], settings: { enabled: true } });
+    });
   });
 });
