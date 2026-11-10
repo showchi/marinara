@@ -29,7 +29,7 @@ if File.exist?(out)
   exit 1
 end
 
-Zip::File::open(out, 'w') do |zip|
+Zip::File.open(out, create: true) do |zip|
   Dir[File.join(package_dir, '**/*')].each do |path|
     zip.add(path.sub(package_dir + '/', ''), path)
   end
